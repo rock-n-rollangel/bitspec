@@ -4,12 +4,43 @@ import type { Value } from "./types.js";
 let initialized: Promise<void> | null = null;
 
 /**
+ * Resolves the input passed to the wasm-bindgen init function.
+ *
+ * In a browser (the default `wasm-pack --target web` target) the generated
+ * init resolves the `.wasm` URL via `import.meta.url` and `fetch`s it — which
+ * works. In Node.js, `fetch` on a `file:` URL is unimplemented, so we detect
+ * Node and hand the init the raw bytes of `bitspec_wasm_bg.wasm` instead.
+ */
+async function resolveWasmInput(): Promise<unknown> {
+  // Detect Node.js (including Vitest's Node environment).
+  // `process.versions.node` is only present in Node-compatible runtimes.
+  const isNode =
+    typeof process !== "undefined" &&
+    process.versions != null &&
+    process.versions.node != null;
+  if (!isNode) return undefined;
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const wasmUrl = new URL("../wasm/bitspec_wasm_bg.wasm", import.meta.url);
+  const path = wasmUrl.protocol === "file:" ? fileURLToPath(wasmUrl) : wasmUrl;
+  return await readFile(path as string);
+}
+
+/**
  * Initialize the WASM module. Must be awaited once before constructing any `Schema`.
  * Safe to call multiple times; subsequent calls return the same promise.
  */
 export function init(): Promise<void> {
   if (initialized === null) {
-    initialized = wasmInit().then(() => {});
+    initialized = (async () => {
+      const input = await resolveWasmInput();
+      if (input === undefined) {
+        await wasmInit();
+      } else {
+        // wasm-bindgen accepts a BufferSource for direct instantiation.
+        await wasmInit({ module_or_path: input as BufferSource });
+      }
+    })();
   }
   return initialized;
 }
