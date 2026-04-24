@@ -1,0 +1,16 @@
+{
+  "name": "bitspec-wasm",
+  "type": "module",
+  "description": "WASM bindings for the bitspec binary schema and transform engine",
+  "version": "0.1.0",
+  "files": [
+    "bitspec_wasm_bg.wasm",
+    "bitspec_wasm.js",
+    "bitspec_wasm.d.ts"
+  ],
+  "main": "bitspec_wasm.js",
+  "types": "bitspec_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
