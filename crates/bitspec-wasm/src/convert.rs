@@ -68,19 +68,19 @@ where
     JsValue::from_str(&format!("{e:?}"))
 }
 
-pub fn convert_json_value(v: serde_json::Value) -> Result<bitspec::assembly::Value, JsValue> {
+pub fn convert_json_value(v: serde_json::Value) -> Result<bitspec::value::Value, JsValue> {
     match v {
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
-                return Ok(bitspec::assembly::Value::I64(i));
+                return Ok(bitspec::value::Value::I64(i));
             }
 
             if let Some(u) = n.as_u64() {
-                return Ok(bitspec::assembly::Value::U64(u));
+                return Ok(bitspec::value::Value::U64(u));
             }
 
             if let Some(f) = n.as_f64() {
-                return Ok(bitspec::assembly::Value::U64(f.to_bits())); // float as raw bits
+                return Ok(bitspec::value::Value::U64(f.to_bits())); // float as raw bits
             }
 
             Err(JsValue::from_str("Invalid number"))
@@ -91,7 +91,7 @@ pub fn convert_json_value(v: serde_json::Value) -> Result<bitspec::assembly::Val
             for item in arr {
                 out.push(convert_json_value(item)?);
             }
-            Ok(bitspec::assembly::Value::Array(out))
+            Ok(bitspec::value::Value::Array(out))
         }
 
         _ => Err(JsValue::from_str("Unsupported value type")),

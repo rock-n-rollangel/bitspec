@@ -1,10 +1,11 @@
 //! Compiled (executable) representation of fields and fragments for fast parsing.
 
 use crate::{
-    assembly::{ArrayCount, Assemble, BitOrder, Value},
+    assembly::{ArrayCount, Assemble, BitOrder},
     bits::{self, reverse_bits_n, sign_extend},
     errors::{CompileError, ReadError, WriteError},
     field::FieldKind,
+    value::Value,
 };
 
 /// Compiled field: either a scalar or an array.
@@ -201,7 +202,11 @@ impl<'a> CompiledScalar {
         let value = match value {
             Value::I64(v) => *v as u64,
             Value::U64(v) => *v,
-            Value::Array(_) => return Err(WriteError::InvalidValue),
+            Value::Array(_)
+            | Value::F32(_)
+            | Value::F64(_)
+            | Value::Bytes(_)
+            | Value::String(_) => return Err(WriteError::InvalidValue),
         };
 
         for fragment in &self.fragments {

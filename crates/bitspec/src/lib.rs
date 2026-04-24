@@ -25,7 +25,7 @@
 //! ];
 //! let schema = Schema::compile(&fields, Some(WriteConfig::default())).unwrap();
 //! let parsed = schema.parse(&[0x42]).unwrap();
-//! assert_eq!(parsed.get("id"), Some(&bitspec::assembly::Value::U64(0x42)));
+//! assert_eq!(parsed.get("id"), Some(&bitspec::value::Value::U64(0x42)));
 //! ```
 
 pub mod assembly;

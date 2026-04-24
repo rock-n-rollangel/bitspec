@@ -5,11 +5,12 @@ use std::collections::{BTreeMap, HashMap};
 #[cfg(feature = "transform")]
 use crate::transform::TransformError;
 use crate::{
-    assembly::{ArrayCount, BitOrder, Value},
+    assembly::{ArrayCount, BitOrder},
     bits,
     compiled::{CompiledField, CompiledFieldKind},
     errors::{CompileError, ReadError, WriteError},
     field::Field,
+    value::Value,
 };
 
 #[derive(Debug, Clone)]

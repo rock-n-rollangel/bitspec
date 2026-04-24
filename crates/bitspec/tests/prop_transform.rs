@@ -3,8 +3,8 @@
 #![cfg(feature = "transform")]
 
 use bitspec::{
-    assembly::Value,
     transform::{Base, Transform},
+    value::Value,
 };
 use proptest::prelude::*;
 

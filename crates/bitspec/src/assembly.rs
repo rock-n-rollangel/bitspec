@@ -39,14 +39,6 @@ impl Default for BitOrder {
     }
 }
 
-/// A value produced when assembling a field from raw bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Value {
-    I64(i64),
-    U64(u64),
-    Array(Vec<Value>),
-}
-
 /// Number of elements in an array field.
 #[derive(Debug, Clone)]
 pub enum ArrayCount {
