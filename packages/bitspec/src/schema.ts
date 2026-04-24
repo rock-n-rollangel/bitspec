@@ -27,8 +27,16 @@ export class Schema {
       throw translateError(e);
     }
     const out: Record<string, Value> = {};
-    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-      out[k] = valueFromWasm(v);
+    // serde_wasm_bindgen serializes Rust maps as JS `Map` objects by default,
+    // so we must iterate via the Map protocol rather than `Object.entries`.
+    if (raw instanceof Map) {
+      for (const [k, v] of raw as Map<string, unknown>) {
+        out[k] = valueFromWasm(v);
+      }
+    } else {
+      for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+        out[k] = valueFromWasm(v);
+      }
     }
     return out;
   }
