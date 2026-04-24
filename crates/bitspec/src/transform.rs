@@ -34,6 +34,24 @@ pub enum TransformError {
     InvalidScaleOffset,
 }
 
+#[cfg(feature = "transform")]
+impl std::fmt::Display for TransformError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidBase => write!(f, "raw value cannot be interpreted as the requested base type"),
+            Self::InvalidType => write!(f, "value type does not match what the transform expects"),
+            Self::InvalidEnumValue(v) => write!(f, "integer {v} has no entry in the enum map"),
+            Self::InvalidEncoding => write!(f, "byte sequence is not valid for the chosen encoding"),
+            Self::InvalidByteValue => write!(f, "byte element is outside 0..=255"),
+            Self::InvalidAsciiByteValue => write!(f, "ASCII byte is outside 0..=0x7F"),
+            Self::InvalidScaleOffset => write!(f, "scale or offset is non-finite"),
+        }
+    }
+}
+
+#[cfg(feature = "transform")]
+impl std::error::Error for TransformError {}
+
 /// Base interpretation for raw assembly values.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Base {
