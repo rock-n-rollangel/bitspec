@@ -33,19 +33,6 @@ pub enum TransformError {
     InvalidScaleOffset,
 }
 
-/// A transformed, decoded value produced by [`Transform::apply`].
-#[derive(Debug, PartialEq)]
-pub enum Value {
-    Int(i64),
-    Float32(f32),
-    Float64(f64),
-    /// Raw bytes (e.g. from a byte array or before string decoding).
-    Bytes(Vec<u8>),
-    String(String),
-    /// An array of transformed values.
-    Array(Vec<Value>),
-}
-
 /// Base interpretation for raw assembly values.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Base {
@@ -74,7 +61,7 @@ pub enum Encoding {
     Ascii,
 }
 
-/// Configuration for transforming raw [`crate::value::Value`] into [`Value`]s.
+/// Configuration for transforming raw [`crate::value::Value`] into [`crate::value::Value`]s.
 ///
 /// Use the builder-style setters (`set_scale`, `set_encoding`, etc.) to configure,
 /// then call [`apply`](Transform::apply) with a raw value.
@@ -200,7 +187,7 @@ impl Transform {
 
 impl Transform {
     /// Applies the transform to a single scalar value (no array handling).
-    fn apply_scalar(&self, raw: crate::value::Value) -> Result<Value, TransformError> {
+    fn apply_scalar(&self, raw: crate::value::Value) -> Result<crate::value::Value, TransformError> {
         let mut v = reinterpret_base(&self.base, raw)?;
         v = apply_numeric_modifiers(v, self.scale, self.offset)?;
         v = apply_enum(v, &self.enum_map)?;
@@ -208,11 +195,12 @@ impl Transform {
         Ok(v)
     }
 
-    /// Transforms a raw assembly value into a [`Value`].
+    /// Transforms a raw value into a [`crate::value::Value`].
     ///
     /// Validates the transform configuration first. For arrays, applies the transform
     /// to each element. For `Base::Bytes`, expects an array of byte-sized values.
-    pub fn apply(&self, raw: crate::value::Value) -> Result<Value, TransformError> {
+    pub fn apply(&self, raw: crate::value::Value) -> Result<crate::value::Value, TransformError> {
+        use crate::value::Value;
         self.validate()?;
 
         if self.base == Base::Bytes {
@@ -222,13 +210,11 @@ impl Transform {
         }
 
         match raw {
-            crate::value::Value::Array(values) => {
+            Value::Array(values) => {
                 let mut out = Vec::with_capacity(values.len());
-
                 for v in values {
                     out.push(self.apply_scalar(v)?);
                 }
-
                 Ok(Value::Array(out))
             }
             _ => self.apply_scalar(raw),
@@ -263,23 +249,20 @@ impl Transform {
 
 /// Interprets a raw assembly value according to the given base type (int/float32/float64).
 /// Bytes base is not handled here; use `extract_bytes` for that.
-fn reinterpret_base(base: &Base, value: crate::value::Value) -> Result<Value, TransformError> {
+fn reinterpret_base(base: &Base, value: crate::value::Value) -> Result<crate::value::Value, TransformError> {
+    use crate::value::Value;
     match (base, value) {
-        // ---------- INT ----------
-        (Base::Int, crate::value::Value::I64(v)) => Ok(Value::Int(v)),
+        // INT: preserve sign (do NOT collapse U64 into I64).
+        (Base::Int, Value::U64(v)) => Ok(Value::U64(v)),
+        (Base::Int, Value::I64(v)) => Ok(Value::I64(v)),
 
-        (Base::Int, crate::value::Value::U64(v)) => Ok(Value::Int(v as i64)),
+        // FLOAT32: reinterpret low 32 bits of U64 as f32.
+        (Base::Float32, Value::U64(v)) => Ok(Value::F32(f32::from_bits(v as u32))),
 
-        // ---------- FLOAT32 ----------
-        (Base::Float32, crate::value::Value::U64(v)) => {
-            let bits = v as u32;
-            Ok(Value::Float32(f32::from_bits(bits)))
-        }
+        // FLOAT64: reinterpret all 64 bits of U64 as f64.
+        (Base::Float64, Value::U64(v)) => Ok(Value::F64(f64::from_bits(v))),
 
-        // ---------- FLOAT64 ----------
-        (Base::Float64, crate::value::Value::U64(v)) => Ok(Value::Float64(f64::from_bits(v))),
-
-        // ---------- BYTES ----------
+        // BYTES: handled by caller (extract_bytes path).
         (Base::Bytes, _) => Err(TransformError::InvalidBase),
 
         _ => Err(TransformError::InvalidBase),
@@ -288,86 +271,76 @@ fn reinterpret_base(base: &Base, value: crate::value::Value) -> Result<Value, Tr
 
 /// Extracts a byte vector from an array of byte-sized U64/I64 values.
 fn extract_bytes(raw: crate::value::Value) -> Result<Vec<u8>, TransformError> {
+    use crate::value::Value;
     match raw {
-        crate::value::Value::Array(values) => {
+        Value::Array(values) => {
             let mut bytes = Vec::with_capacity(values.len());
-
             for v in values {
                 match v {
-                    crate::value::Value::U64(x) => {
+                    Value::U64(x) => {
                         if x > 255 {
                             return Err(TransformError::InvalidByteValue);
                         }
                         bytes.push(x as u8);
                     }
-
-                    crate::value::Value::I64(x) => {
-                        if x < 0 || x > 255 {
+                    Value::I64(x) => {
+                        if !(0..=255).contains(&x) {
                             return Err(TransformError::InvalidByteValue);
                         }
                         bytes.push(x as u8);
                     }
-
-                    _ => {
-                        return Err(TransformError::InvalidType);
-                    }
+                    _ => return Err(TransformError::InvalidType),
                 }
             }
-
             Ok(bytes)
         }
-
         _ => Err(TransformError::InvalidType),
     }
 }
 
 /// Applies scale and offset to numeric values: value * scale + offset.
 fn apply_numeric_modifiers(
-    value: Value,
+    value: crate::value::Value,
     scale: Option<f64>,
     offset: Option<f64>,
-) -> Result<Value, TransformError> {
+) -> Result<crate::value::Value, TransformError> {
+    use crate::value::Value;
     if scale.is_none() && offset.is_none() {
         return Ok(value);
     }
-
     let scale = scale.unwrap_or(1.0);
     let offset = offset.unwrap_or(0.0);
 
     match value {
-        Value::Int(v) => Ok(Value::Float64(v as f64 * scale + offset)),
-
-        Value::Float32(v) => Ok(Value::Float32(v * scale as f32 + offset as f32)),
-
-        Value::Float64(v) => Ok(Value::Float64(v * scale + offset)),
-
-        _ => Ok(value),
+        Value::U64(v) => Ok(Value::F64(v as f64 * scale + offset)),
+        Value::I64(v) => Ok(Value::F64(v as f64 * scale + offset)),
+        Value::F32(v) => Ok(Value::F32(v * scale as f32 + offset as f32)),
+        Value::F64(v) => Ok(Value::F64(v * scale + offset)),
+        other => Ok(other),
     }
 }
 
 /// If encoding is set, decodes bytes to a string (UTF-8 or ASCII), optionally zero-terminated and trimmed.
 fn apply_string(
-    value: Value,
+    value: crate::value::Value,
     encoding: &Option<Encoding>,
     zero_terminated: Option<bool>,
     trim: Option<bool>,
-) -> Result<Value, TransformError> {
+) -> Result<crate::value::Value, TransformError> {
+    use crate::value::Value;
     let encoding = match encoding {
         Some(e) => e,
         None => return Ok(value),
     };
-
     let mut bytes = match value {
         Value::Bytes(b) => b,
         _ => return Err(TransformError::InvalidType),
     };
-
     if zero_terminated.unwrap_or(false) {
         if let Some(pos) = bytes.iter().position(|b| *b == 0) {
             bytes.truncate(pos);
         }
     }
-
     let mut s = match encoding {
         Encoding::Ascii => {
             for b in &bytes {
@@ -375,29 +348,32 @@ fn apply_string(
                     return Err(TransformError::InvalidAsciiByteValue);
                 }
             }
-
             String::from_utf8(bytes).map_err(|_| TransformError::InvalidEncoding)?
         }
         Encoding::Utf8 => String::from_utf8(bytes).map_err(|_| TransformError::InvalidEncoding)?,
     };
-
     if trim.unwrap_or(false) {
         s = s.trim().to_string();
     }
-
     Ok(Value::String(s))
 }
+
 /// If enum_map is set, maps an integer value to its string label.
 fn apply_enum(
-    value: Value,
-    enum_map: &Option<HashMap<i64, String>>,
-) -> Result<Value, TransformError> {
+    value: crate::value::Value,
+    enum_map: &Option<std::collections::HashMap<i64, String>>,
+) -> Result<crate::value::Value, TransformError> {
+    use crate::value::Value;
     if let Some(map) = enum_map {
         match value {
-            Value::Int(v) => map
+            Value::I64(v) => map
                 .get(&v)
                 .map(|s| Value::String(s.clone()))
                 .ok_or(TransformError::InvalidEnumValue(v)),
+            Value::U64(v) => map
+                .get(&(v as i64))
+                .map(|s| Value::String(s.clone()))
+                .ok_or(TransformError::InvalidEnumValue(v as i64)),
             _ => Err(TransformError::InvalidType),
         }
     } else {
@@ -405,23 +381,8 @@ fn apply_enum(
     }
 }
 
-/// Converts a low‑level `crate::value::Value` into a `Value`.
-///
-/// This is used when no explicit transform is configured for a field but the
-/// value still needs to be presented through the `bitspec-transform` layer.
-pub fn value_to_transform_value(v: crate::value::Value) -> Value {
-    match v {
-        crate::value::Value::U64(x) => Value::Int(x as i64),
-        crate::value::Value::I64(x) => Value::Int(x),
-        crate::value::Value::F32(x) => Value::Float32(x),
-        crate::value::Value::F64(x) => Value::Float64(x),
-        crate::value::Value::Bytes(b) => Value::Bytes(b),
-        crate::value::Value::String(s) => Value::String(s),
-        crate::value::Value::Array(xs) => {
-            Value::Array(xs.into_iter().map(value_to_transform_value).collect())
-        }
-    }
-}
+#[cfg(test)]
+use crate::value::Value;
 
 #[test]
 fn test_float32_from_bits() {
@@ -438,7 +399,7 @@ fn test_float32_from_bits() {
     let raw = crate::value::Value::U64(0x40490FDB);
     let result = transform.apply(raw).unwrap();
 
-    assert_eq!(result, Value::Float32(3.2415927));
+    assert_eq!(result, Value::F32(3.2415927));
 }
 
 #[test]
@@ -456,7 +417,7 @@ fn test_float64_from_bits() {
     let raw = crate::value::Value::U64(0x400921FB54442D18);
     let result = transform.apply(raw).unwrap();
 
-    assert_eq!(result, Value::Float64(3.241592653589793));
+    assert_eq!(result, Value::F64(3.241592653589793));
 }
 
 #[test]
@@ -498,25 +459,25 @@ fn test_int() {
     };
     assert_eq!(
         transform.apply(crate::value::Value::I64(10)).unwrap(),
-        Value::Float64(21.0)
+        Value::F64(21.0)
     );
 
     transform.scale = Some(1.0);
     transform.offset = Some(-10.0);
     assert_eq!(
         transform.apply(crate::value::Value::I64(10)).unwrap(),
-        Value::Float64(0.0)
+        Value::F64(0.0)
     );
     assert_eq!(
         transform.apply(crate::value::Value::U64(10)).unwrap(),
-        Value::Float64(0.0)
+        Value::F64(0.0)
     );
 
     transform.scale = Some(1.0);
     transform.offset = Some(0.0);
     assert_eq!(
         transform.apply(crate::value::Value::U64(0)).unwrap(),
-        Value::Float64(0.0)
+        Value::F64(0.0)
     );
 }
 
@@ -664,9 +625,9 @@ fn test_array() {
     assert_eq!(
         transform.apply(value).unwrap(),
         Value::Array(vec![
-            Value::Float64(21.0),
-            Value::Float64(41.0),
-            Value::Float64(61.0)
+            Value::F64(21.0),
+            Value::F64(41.0),
+            Value::F64(61.0)
         ])
     );
 }

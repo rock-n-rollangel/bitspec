@@ -42,8 +42,6 @@
 
 mod convert;
 
-use std::collections::HashMap;
-
 use bitspec::serde::SchemaDef;
 use wasm_bindgen::prelude::*;
 
@@ -105,17 +103,10 @@ impl WasmSchema {
     }
 
     pub fn serialize(&self, obj: JsValue) -> Result<Vec<u8>, JsValue> {
-        // Convert JS object into a generic Rust structure
-        let raw: HashMap<String, serde_json::Value> =
-            serde_wasm_bindgen::from_value(obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-        // Convert serde_json::Value -> bitspec::Value
-        let mut map = HashMap::new();
-
-        for (k, v) in raw {
-            map.insert(k, convert::convert_json_value(v)?);
-        }
-
+        let btree: std::collections::BTreeMap<String, bitspec::value::Value> =
+            serde_wasm_bindgen::from_value(obj).map_err(convert::error_to_js)?;
+        let map: std::collections::HashMap<String, bitspec::value::Value> =
+            btree.into_iter().collect();
         self.schema.serialize(&map).map_err(convert::error_to_js)
     }
 }

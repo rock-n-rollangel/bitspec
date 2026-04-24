@@ -2,8 +2,6 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-#[cfg(feature = "transform")]
-use crate::transform::TransformError;
 use crate::{
     assembly::{ArrayCount, BitOrder},
     bits,
@@ -155,26 +153,16 @@ impl Schema {
     #[cfg(feature = "transform")]
     pub fn apply_transforms(
         &self,
-        obj: BTreeMap<String, Value>,
-    ) -> Result<BTreeMap<String, crate::transform::Value>, TransformError> {
-        let mut map: BTreeMap<String, crate::transform::Value> = BTreeMap::new();
-
+        obj: std::collections::BTreeMap<String, crate::value::Value>,
+    ) -> Result<std::collections::BTreeMap<String, crate::value::Value>, crate::transform::TransformError> {
+        let mut map = std::collections::BTreeMap::new();
         for (name, value) in obj {
-            let transform = self.transforms.get(&name);
-            match transform {
-                Some(transform) => {
-                    let value = transform.apply(value)?;
-                    map.insert(name, value);
-                }
-                None => {
-                    map.insert(
-                        name.clone(),
-                        crate::transform::value_to_transform_value(value),
-                    );
-                }
-            }
+            let transformed = match self.transforms.get(&name) {
+                Some(transform) => transform.apply(value)?,
+                None => value,
+            };
+            map.insert(name, transformed);
         }
-
         Ok(map)
     }
 
