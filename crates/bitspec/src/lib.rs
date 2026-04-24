@@ -1,4 +1,4 @@
-//! # bitcraft
+//! # bitspec
 //!
 //! A library for bit-level parsing of binary data using declarative schemas.
 //!
@@ -9,10 +9,10 @@
 //! ## Example
 //!
 //! ```
-//! use bitcraft::schema::{Schema, WriteConfig};
-//! use bitcraft::field::{Field, FieldKind};
-//! use bitcraft::fragment::Fragment;
-//! use bitcraft::assembly::{Assemble, BitOrder};
+//! use bitspec::schema::{Schema, WriteConfig};
+//! use bitspec::field::{Field, FieldKind};
+//! use bitspec::fragment::Fragment;
+//! use bitspec::assembly::{Assemble, BitOrder};
 //!
 //! let fields = vec![
 //!     Field {
@@ -25,7 +25,7 @@
 //! ];
 //! let schema = Schema::compile(&fields, Some(WriteConfig::default())).unwrap();
 //! let parsed = schema.parse(&[0x42]).unwrap();
-//! assert_eq!(parsed.get("id"), Some(&bitcraft::assembly::Value::U64(0x42)));
+//! assert_eq!(parsed.get("id"), Some(&bitspec::assembly::Value::U64(0x42)));
 //! ```
 
 pub mod assembly;

@@ -1,7 +1,7 @@
-
 [workspace]
 members = [
-  "crates/bitcraft", "crates/bitcraft-wasm",
+  "crates/bitspec",
+  "crates/bitspec-wasm",
 ]
 
 [workspace.package]

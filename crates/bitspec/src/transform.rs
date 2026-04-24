@@ -408,7 +408,7 @@ fn apply_enum(
 /// Converts a low‑level `crate::assembly::Value` into a `Value`.
 ///
 /// This is used when no explicit transform is configured for a field but the
-/// value still needs to be presented through the `bitcraft-transform` layer.
+/// value still needs to be presented through the `bitspec-transform` layer.
 pub fn value_to_transform_value(v: crate::assembly::Value) -> Value {
     match v {
         crate::assembly::Value::U64(x) => Value::Int(x as i64),

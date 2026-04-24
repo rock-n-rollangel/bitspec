@@ -1,13 +1,13 @@
-//! Helpers for converting JSON schema definitions into core `bitcraft` types
+//! Helpers for converting JSON schema definitions into core `bitspec` types
 //! and JavaScript‑friendly values.
 //!
 //! This module is internal; its functions back the public
 //! [`WasmSchema`](crate::WasmSchema) API by:
 //!
-//! - Converting [`SchemaDef`](crate::schema_def::SchemaDef) into
-//!   `bitcraft::field::Field` values.
-//! - Building `bitcraft_transform::Transform` values from
-//!   [`TransformDef`](crate::transform_def::TransformDef).
+//! - Converting [`SchemaDef`](bitspec::serde::SchemaDef) into
+//!   `bitspec::field::Field` values.
+//! - Building `bitspec::transform::Transform` values from
+//!   [`TransformDef`](bitspec::serde::TransformDef).
 //! - Converting parsed values into `JsValue` so they can be consumed
 //!   ergonomically from JavaScript/TypeScript.
 use std::collections::BTreeMap;
@@ -17,7 +17,7 @@ use wasm_bindgen::JsValue;
 
 /// Serializable representation of a parsed value that can be converted to `JsValue`.
 ///
-/// This mirrors [`bitcraft_transform::Value`] but uses concrete Rust types that
+/// This mirrors [`bitspec::value::Value`] but uses concrete Rust types that
 /// can be serialized via `serde` and then passed through `serde_wasm_bindgen`
 /// into JavaScript.
 #[derive(Serialize)]
@@ -31,15 +31,15 @@ pub enum JsValueOut {
     Array(Vec<JsValueOut>),
 }
 
-/// Converts a `bitcraft_transform::Value` into the serializable [`JsValueOut`] shape.
-fn value_to_js(v: bitcraft::transform::Value) -> JsValueOut {
+/// Converts a `bitspec::value::Value` into the serializable [`JsValueOut`] shape.
+fn value_to_js(v: bitspec::transform::Value) -> JsValueOut {
     match v {
-        bitcraft::transform::Value::Int(x) => JsValueOut::Int(x),
-        bitcraft::transform::Value::Float32(x) => JsValueOut::Float32(x),
-        bitcraft::transform::Value::Float64(x) => JsValueOut::Float64(x),
-        bitcraft::transform::Value::String(x) => JsValueOut::String(x),
-        bitcraft::transform::Value::Bytes(x) => JsValueOut::Bytes(x),
-        bitcraft::transform::Value::Array(xs) => {
+        bitspec::transform::Value::Int(x) => JsValueOut::Int(x),
+        bitspec::transform::Value::Float32(x) => JsValueOut::Float32(x),
+        bitspec::transform::Value::Float64(x) => JsValueOut::Float64(x),
+        bitspec::transform::Value::String(x) => JsValueOut::String(x),
+        bitspec::transform::Value::Bytes(x) => JsValueOut::Bytes(x),
+        bitspec::transform::Value::Array(xs) => {
             JsValueOut::Array(xs.into_iter().map(value_to_js).collect())
         }
     }
@@ -49,7 +49,7 @@ fn value_to_js(v: bitcraft::transform::Value) -> JsValueOut {
 ///
 /// Keys are field names and values are first converted into [`JsValueOut`]
 /// and then into `JsValue` via `serde_wasm_bindgen`.
-pub fn map_to_js(map: BTreeMap<String, bitcraft::transform::Value>) -> Result<JsValue, JsValue> {
+pub fn map_to_js(map: BTreeMap<String, bitspec::transform::Value>) -> Result<JsValue, JsValue> {
     let out: BTreeMap<String, JsValueOut> =
         map.into_iter().map(|(k, v)| (k, value_to_js(v))).collect();
 
@@ -68,19 +68,19 @@ where
     JsValue::from_str(&format!("{e:?}"))
 }
 
-pub fn convert_json_value(v: serde_json::Value) -> Result<bitcraft::assembly::Value, JsValue> {
+pub fn convert_json_value(v: serde_json::Value) -> Result<bitspec::assembly::Value, JsValue> {
     match v {
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
-                return Ok(bitcraft::assembly::Value::I64(i));
+                return Ok(bitspec::assembly::Value::I64(i));
             }
 
             if let Some(u) = n.as_u64() {
-                return Ok(bitcraft::assembly::Value::U64(u));
+                return Ok(bitspec::assembly::Value::U64(u));
             }
 
             if let Some(f) = n.as_f64() {
-                return Ok(bitcraft::assembly::Value::U64(f.to_bits())); // float as raw bits
+                return Ok(bitspec::assembly::Value::U64(f.to_bits())); // float as raw bits
             }
 
             Err(JsValue::from_str("Invalid number"))
@@ -91,7 +91,7 @@ pub fn convert_json_value(v: serde_json::Value) -> Result<bitcraft::assembly::Va
             for item in arr {
                 out.push(convert_json_value(item)?);
             }
-            Ok(bitcraft::assembly::Value::Array(out))
+            Ok(bitspec::assembly::Value::Array(out))
         }
 
         _ => Err(JsValue::from_str("Unsupported value type")),

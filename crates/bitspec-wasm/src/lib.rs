@@ -1,15 +1,15 @@
-//! WASM bindings for the `bitcraft` binary schema engine.
+//! WASM bindings for the `bitspec` binary schema engine.
 //!
 //! This crate exposes a compact API to JavaScript for parsing binary
 //! payloads according to a JSON schema definition. Internally it uses
-//! the `bitcraft` crate to describe how bits are laid out in a payload
-//! and the `bitcraft-transform` crate to turn raw values into
+//! the `bitspec` crate to describe how bits are laid out in a payload
+//! and the `bitspec::transform` module to turn raw values into
 //! human‑friendly data (scaling, offsets, text decoding, enums, etc.).
 //!
 //! At a high level you:
-//! - **Describe your fields** in JSON using the shape in `schema_def`
+//! - **Describe your fields** in JSON using the shape in `bitspec::serde::SchemaDef`
 //!   (field name, kind, bit fragments, signedness, etc.).
-//! - **Optionally attach transforms** using the shape in `transform_def`
+//! - **Optionally attach transforms** using the shape in `bitspec::serde::TransformDef`
 //!   (base type, scaling, encoding, enum map, …).
 //! - **Compile** the schema once, and **parse** binary payloads many
 //!   times from JavaScript.
@@ -44,12 +44,12 @@ mod convert;
 
 use std::collections::HashMap;
 
-use bitcraft::serde::SchemaDef;
+use bitspec::serde::SchemaDef;
 use wasm_bindgen::prelude::*;
 
 /// Compiled schema that can be used from JavaScript to parse binary data.
 ///
-/// A `WasmSchema` owns a compiled [`bitcraft::schema::Schema`] plus any
+/// A `WasmSchema` owns a compiled [`bitspec::schema::Schema`] plus any
 /// per‑field transforms that should be applied to the raw values.
 ///
 /// Typical usage from JavaScript/TypeScript is:
@@ -62,7 +62,7 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub struct WasmSchema {
     /// Compiled bit‑level schema describing how to read the payload.
-    schema: bitcraft::schema::Schema,
+    schema: bitspec::schema::Schema,
 }
 
 #[wasm_bindgen]
@@ -76,14 +76,14 @@ impl WasmSchema {
     ///   signedness and assemble strategy.
     /// - **Fragments**: the bit ranges that make up each field.
     /// - **Transforms** (optional): how to post‑process raw values using
-    ///   `bitcraft-transform` (base type, scale/offset, encodings, enums).
+    ///   `bitspec::transform` (base type, scale/offset, encodings, enums).
     ///
     /// On success this compiles the schema and prepares any transforms so
     /// that it can be reused to parse many payloads efficiently.
     #[wasm_bindgen(constructor)]
     pub fn new(schema_json: &str) -> Result<WasmSchema, JsValue> {
         let def: SchemaDef = serde_json::from_str(schema_json).map_err(convert::error_to_js)?;
-        let schema = bitcraft::schema::Schema::try_from(def).map_err(convert::error_to_js)?;
+        let schema = bitspec::schema::Schema::try_from(def).map_err(convert::error_to_js)?;
         Ok(WasmSchema { schema })
     }
 
@@ -109,7 +109,7 @@ impl WasmSchema {
         let raw: HashMap<String, serde_json::Value> =
             serde_wasm_bindgen::from_value(obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-        // Convert serde_json::Value -> bitcraft::Value
+        // Convert serde_json::Value -> bitspec::Value
         let mut map = HashMap::new();
 
         for (k, v) in raw {

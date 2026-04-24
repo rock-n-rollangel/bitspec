@@ -2,7 +2,7 @@
 //!
 //! These types describe the *shape* of the binary data to be parsed. They are
 //! intended to be constructed from JSON (for example a schema file shipped
-//! with your application) and then compiled into core `bitcraft` types.
+//! with your application) and then compiled into core `bitspec` types.
 //!
 //! The same shapes are expected when you call `Schema::compile` with a JSON string.
 

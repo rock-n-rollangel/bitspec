@@ -1,4 +1,4 @@
-use bitcraft::{
+use bitspec::{
     assembly::{Assemble, BitOrder},
     field::{Field, FieldKind},
     fragment::Fragment,
