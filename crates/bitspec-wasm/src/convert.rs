@@ -14,12 +14,6 @@ pub fn map_to_js(
     use serde::Serialize;
     let serializer = serde_wasm_bindgen::Serializer::new()
         .serialize_large_number_types_as_bigints(true);
-    map.serialize(&serializer).map_err(error_to_js)
-}
-
-pub fn error_to_js<T>(e: T) -> JsValue
-where
-    T: std::fmt::Debug,
-{
-    JsValue::from_str(&format!("{e:?}"))
+    map.serialize(&serializer)
+        .map_err(|e| JsValue::from(crate::error::WasmError::from(e)))
 }

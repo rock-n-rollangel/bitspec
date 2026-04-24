@@ -41,6 +41,7 @@
 //! which makes it easy to inspect failures from JavaScript.
 
 mod convert;
+mod error;
 
 use bitspec::serde::SchemaDef;
 use wasm_bindgen::prelude::*;
@@ -80,8 +81,10 @@ impl WasmSchema {
     /// that it can be reused to parse many payloads efficiently.
     #[wasm_bindgen(constructor)]
     pub fn new(schema_json: &str) -> Result<WasmSchema, JsValue> {
-        let def: SchemaDef = serde_json::from_str(schema_json).map_err(convert::error_to_js)?;
-        let schema = bitspec::schema::Schema::try_from(def).map_err(convert::error_to_js)?;
+        let def: SchemaDef = serde_json::from_str(schema_json)
+            .map_err(|e| JsValue::from(error::WasmError::from(e)))?;
+        let schema = bitspec::schema::Schema::try_from(def)
+            .map_err(|e| JsValue::from(error::WasmError::from(e)))?;
         Ok(WasmSchema { schema })
     }
 
@@ -94,17 +97,23 @@ impl WasmSchema {
     ///
     /// On error a `JsValue` containing a debug string is returned.
     pub fn parse(&self, data: &[u8]) -> Result<JsValue, JsValue> {
-        let result = self.schema.parse(data).map_err(convert::error_to_js)?;
+        let result = self
+            .schema
+            .parse(data)
+            .map_err(|e| JsValue::from(error::WasmError::from(e)))?;
         let transformed = self
             .schema
             .apply_transforms(result)
-            .map_err(convert::error_to_js)?;
+            .map_err(|e| JsValue::from(error::WasmError::from(e)))?;
         convert::map_to_js(transformed)
     }
 
     pub fn serialize(&self, obj: JsValue) -> Result<Vec<u8>, JsValue> {
         let map: std::collections::BTreeMap<String, bitspec::value::Value> =
-            serde_wasm_bindgen::from_value(obj).map_err(convert::error_to_js)?;
-        self.schema.serialize(&map).map_err(convert::error_to_js)
+            serde_wasm_bindgen::from_value(obj)
+                .map_err(|e| JsValue::from(error::WasmError::from(e)))?;
+        self.schema
+            .serialize(&map)
+            .map_err(|e| JsValue::from(error::WasmError::from(e)))
     }
 }
