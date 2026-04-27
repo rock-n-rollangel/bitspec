@@ -16,8 +16,11 @@ pub fn read_bit_at(data: &[u8], bit_pos: usize) -> Result<u8, ReadError> {
     Ok((data[byte_index] >> (7 - bit_index)) & 1)
 }
 
-/// Reads `n` bits starting at `bit_pos` as an unsigned value (max 64 bits). MSB-first.
-pub fn read_bits_at(data: &[u8], bit_pos: usize, n: usize) -> Result<u64, ReadError> {
+/// Reference implementation of `read_bits_at` using a per-bit loop.
+///
+/// Slower than `read_bits_at` but kept as the ground-truth oracle for
+/// property tests (see `tests/prop_read_bits.rs`).
+pub fn read_bits_at_slow(data: &[u8], bit_pos: usize, n: usize) -> Result<u64, ReadError> {
     if n > 64 {
         return Err(ReadError::TooManyBitsRead);
     }
@@ -39,6 +42,37 @@ pub fn read_bits_at(data: &[u8], bit_pos: usize, n: usize) -> Result<u64, ReadEr
     }
 
     Ok(value)
+}
+
+/// Reads `n` bits starting at `bit_pos` as an unsigned value (max 64 bits).
+///
+/// Uses byte-coalesced accumulation: at most 9 byte reads for `n <= 64`.
+pub fn read_bits_at(data: &[u8], bit_pos: usize, n: usize) -> Result<u64, ReadError> {
+    if n > 64 {
+        return Err(ReadError::TooManyBitsRead);
+    }
+    let end = bit_pos
+        .checked_add(n)
+        .ok_or(ReadError::OutOfBounds)?;
+    if end > data.len() * 8 {
+        return Err(ReadError::OutOfBounds);
+    }
+    if n == 0 {
+        return Ok(0);
+    }
+
+    let byte_start = bit_pos / 8;
+    let byte_end = (end + 7) / 8;
+    let bit_offset = bit_pos % 8;
+
+    let mut acc: u128 = 0;
+    for i in byte_start..byte_end {
+        acc = (acc << 8) | data[i] as u128;
+    }
+
+    let trailing = (byte_end - byte_start) * 8 - (bit_offset + n);
+    let mask = if n == 64 { u64::MAX } else { (1u64 << n) - 1 };
+    Ok(((acc >> trailing) as u64) & mask)
 }
 
 /// Writes the low `n` bits of `value` into `data` starting at bit position
